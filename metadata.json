@@ -1,0 +1,5 @@
+{
+  "name": "CarCustomizerAI",
+  "description": "An AI-powered application that allows users to upload a photo of their car and visualize custom modifications in real-time using generative AI.",
+  "requestFramePermissions": []
+}
