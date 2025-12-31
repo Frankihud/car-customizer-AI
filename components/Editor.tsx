@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ReactCompareSlider, ReactCompareSliderImage } from 'react-compare-slider';
 import ControlPanel from './ControlPanel';
 import Spinner from './Spinner';
-import { DownloadIcon } from './icons';
+import { DownloadIcon, ZoomInIcon, ZoomOutIcon, FitIcon, HandIcon } from './icons';
 import { applyModification } from '../services/geminiService';
 import type { Modification, CarView } from '../types';
 
@@ -25,6 +25,14 @@ const Editor: React.FC<EditorProps> = ({ initialViews }) => {
   const [activeViewId, setActiveViewId] = useState<string>('');
   const [isGlobalLoading, setIsGlobalLoading] = useState<boolean>(true);
   const [activeModification, setActiveModification] = useState<Modification | null>(null);
+  
+  // Zoom & Pan State
+  const [zoom, setZoom] = useState<number>(1);
+  const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isPanMode, setIsPanMode] = useState<boolean>(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Initialize views from files
   useEffect(() => {
@@ -63,6 +71,13 @@ const Editor: React.FC<EditorProps> = ({ initialViews }) => {
     loadImages();
   }, [initialViews]);
   
+  // Reset Zoom when changing views
+  useEffect(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setIsPanMode(false);
+  }, [activeViewId]);
+
   const handleApplyModification = useCallback(async (mod: Modification) => {
     setActiveModification(mod);
     setIsGlobalLoading(true);
@@ -128,6 +143,59 @@ const Editor: React.FC<EditorProps> = ({ initialViews }) => {
     document.body.removeChild(link);
   };
 
+  // Zoom Handlers
+  const handleZoomIn = () => setZoom(z => Math.min(z + 0.5, 4));
+  const handleZoomOut = () => {
+    setZoom(z => {
+        const newZoom = Math.max(z - 0.5, 1);
+        if (newZoom === 1) {
+            setPan({ x: 0, y: 0 });
+            setIsPanMode(false);
+        }
+        return newZoom;
+    });
+  };
+  const handleFit = () => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+    setIsPanMode(false);
+  };
+  const togglePanMode = () => {
+      if (zoom > 1) {
+        setIsPanMode(!isPanMode);
+      }
+  };
+
+  // Pan Handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+      if (!isPanMode || zoom === 1) return;
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+      e.preventDefault(); 
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+      if (!isDragging) return;
+      setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+      e.preventDefault();
+  };
+
+  const handleMouseUp = () => {
+      setIsDragging(false);
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || isPanMode) {
+         e.preventDefault();
+         e.stopPropagation();
+         if (e.deltaY < 0) {
+             handleZoomIn();
+         } else {
+             handleZoomOut();
+         }
+    }
+  };
+
   const activeView = viewStates.find(v => v.id === activeViewId);
   
   if (isGlobalLoading && viewStates.length === 0) {
@@ -188,9 +256,36 @@ const Editor: React.FC<EditorProps> = ({ initialViews }) => {
         </div>
 
         {/* Main Editor Area */}
-        <div className="relative rounded-xl overflow-hidden bg-gray-800 shadow-2xl aspect-[4/3] group border border-gray-700">
+        <div 
+            className="relative rounded-xl overflow-hidden bg-gray-900 shadow-2xl group border border-gray-700 flex justify-center items-center bg-black/20"
+            ref={containerRef}
+            onWheel={handleWheel}
+        >
+            {/* Zoom Toolbar */}
+            <div className="absolute top-4 right-4 z-40 flex flex-col gap-2 bg-gray-800/90 backdrop-blur rounded-lg p-2 border border-gray-600 shadow-xl transition-opacity opacity-0 group-hover:opacity-100">
+                <button onClick={handleZoomIn} className="p-2 hover:bg-gray-700 rounded text-gray-200 hover:text-white" title="Zoom In">
+                    <ZoomInIcon className="w-5 h-5" />
+                </button>
+                <button onClick={handleZoomOut} className="p-2 hover:bg-gray-700 rounded text-gray-200 hover:text-white" title="Zoom Out">
+                    <ZoomOutIcon className="w-5 h-5" />
+                </button>
+                <button onClick={handleFit} className="p-2 hover:bg-gray-700 rounded text-gray-200 hover:text-white" title="Fit to Screen">
+                    <FitIcon className="w-5 h-5" />
+                </button>
+                <div className="h-px bg-gray-600 my-1 w-full"></div>
+                <button 
+                    onClick={togglePanMode} 
+                    className={`p-2 rounded transition-colors ${isPanMode ? 'bg-blue-600 text-white shadow' : 'hover:bg-gray-700 text-gray-200 hover:text-white'} ${zoom === 1 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={zoom === 1 ? "Zoom in to pan" : "Toggle Pan Mode"}
+                    disabled={zoom === 1}
+                >
+                    <HandIcon className="w-5 h-5" />
+                </button>
+            </div>
+
+            {/* Global Loading Overlay */}
             {isGlobalLoading && (
-                <div className="absolute inset-0 bg-black/70 flex flex-col justify-center items-center z-20 backdrop-blur-md transition-all duration-300">
+                <div className="absolute inset-0 bg-black/70 flex flex-col justify-center items-center z-50 backdrop-blur-md transition-all duration-300 pointer-events-none">
                     <Spinner />
                     <p className="mt-6 text-xl font-bold text-white tracking-tight">Applying Modifications</p>
                     {activeModification && (
@@ -204,6 +299,7 @@ const Editor: React.FC<EditorProps> = ({ initialViews }) => {
                 </div>
             )}
             
+            {/* Error Overlay */}
             {activeView.error && (
                 <div className="absolute top-4 left-4 right-4 bg-red-500/10 border border-red-500/50 backdrop-blur-md text-red-200 p-4 rounded-lg z-30 flex items-center gap-3">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -216,24 +312,57 @@ const Editor: React.FC<EditorProps> = ({ initialViews }) => {
                 </div>
             )}
 
-            <ReactCompareSlider
-            itemOne={<ReactCompareSliderImage src={activeView.original} alt={`${activeView.label} Original`} />}
-            itemTwo={<ReactCompareSliderImage src={activeView.modified} alt={`${activeView.label} Modified`} />}
-            handle={
-                <div className="slider-handle">
-                    <button className="shadow-lg transform transition-transform group-hover:scale-110 active:scale-95">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 text-gray-800">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
-                        </svg>
-                    </button>
+            {/* Zoomable Viewport */}
+            <div 
+                className={`w-full h-full overflow-hidden transition-cursor duration-150 ${isPanMode ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default'}`}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+            >
+                <div 
+                    style={{ 
+                        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                        transition: isDragging ? 'none' : 'transform 0.1s ease-out',
+                        transformOrigin: 'center center',
+                    }}
+                    className="w-full h-full flex justify-center items-center"
+                >
+                     {/* Wrapper to handle pointer events for panning vs slider interaction */}
+                    <div className={isPanMode ? 'pointer-events-none' : ''}>
+                        <ReactCompareSlider
+                            itemOne={
+                                <ReactCompareSliderImage 
+                                    src={activeView.original} 
+                                    alt={`${activeView.label} Original`} 
+                                    style={{ maxHeight: '70vh', width: 'auto', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
+                                />
+                            }
+                            itemTwo={
+                                <ReactCompareSliderImage 
+                                    src={activeView.modified} 
+                                    alt={`${activeView.label} Modified`} 
+                                    style={{ maxHeight: '70vh', width: 'auto', maxWidth: '100%', height: 'auto', objectFit: 'contain' }}
+                                />
+                            }
+                            handle={
+                                <div className="slider-handle">
+                                    <button className="shadow-lg transform transition-transform group-hover:scale-110 active:scale-95">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5 text-gray-800">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            }
+                        />
+                    </div>
                 </div>
-            }
-            />
+            </div>
             
-            <div className="absolute bottom-4 left-4 z-10">
+            <div className="absolute bottom-4 left-4 z-10 pointer-events-none">
                  <span className="bg-black/60 backdrop-blur text-white text-xs font-bold px-2 py-1 rounded border border-white/10">Original</span>
             </div>
-            <div className="absolute bottom-4 right-4 z-10">
+            <div className="absolute bottom-4 right-4 z-10 pointer-events-none">
                  <span className="bg-blue-600/80 backdrop-blur text-white text-xs font-bold px-2 py-1 rounded shadow-lg border border-blue-400/30">Modified</span>
             </div>
         </div>

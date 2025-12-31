@@ -23,6 +23,18 @@ const colors = [
     { name: 'Chrome', hex: '#c0c0c0', prompt: 'mirror-like chrome' },
 ];
 
+const parts = [
+    { id: 'full', label: 'Full Body' },
+    { id: 'hood', label: 'Hood' },
+    { id: 'roof', label: 'Roof' },
+    { id: 'mirrors', label: 'Mirrors' },
+    { id: 'spoiler', label: 'Spoiler' },
+    { id: 'front_bumper', label: 'Front Bumper' },
+    { id: 'rear_bumper', label: 'Rear Bumper' },
+    { id: 'trunk', label: 'Trunk' },
+    { id: 'calipers', label: 'Calipers' },
+];
+
 const ColorPicker: React.FC<ColorPickerProps> = ({ 
     onApply, 
     disabled, 
@@ -33,6 +45,7 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
     const [customColorHex, setCustomColorHex] = useState('#3b82f6');
     const [customColorName, setCustomColorName] = useState('');
     const [mode, setMode] = useState<'preset' | 'custom'>('preset');
+    const [selectedPart, setSelectedPart] = useState(parts[0]);
 
     const handlePresetClick = (color: typeof colors[0]) => {
         setSelectedColor(color);
@@ -50,26 +63,60 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
     };
 
     const handleApply = () => {
-        if (mode === 'preset') {
-            onApply({
-                type: modificationType,
-                value: selectedColor.name,
-                prompt: `${promptPrefix} ${selectedColor.prompt}`,
-            });
+        const colorValue = mode === 'preset' ? selectedColor.prompt : (customColorName.trim() ? customColorName : customColorHex);
+        const displayValue = mode === 'preset' ? selectedColor.name : (customColorName || customColorHex);
+        
+        let finalPrompt = '';
+
+        // Generate high-precision prompts based on type to address coverage issues
+        if (modificationType === ModificationType.COLOR) {
+            if (selectedPart.id === 'full') {
+                // Enhanced prompt for body paint to ensure coverage of all parts (bumpers, skirts, etc.)
+                finalPrompt = `Change the car's entire body paint to ${colorValue}. Apply this color to all painted body panels including the front and rear bumpers, side skirts, fenders, hood, roof, and doors. Ensure high precision at the edges. Do not paint the windows, windshield, lights, grille, tires, or background.`;
+            } else {
+                // Specific part prompt
+                finalPrompt = `Change only the color of the car's ${selectedPart.label.toLowerCase()} to ${colorValue}. Keep the rest of the car's body paint and other parts exactly as they are. Ensure high precision at the edges of the ${selectedPart.label.toLowerCase()}.`;
+            }
+        } else if (modificationType === ModificationType.WHEELS) {
+            // Enhanced prompt for wheels
+            finalPrompt = `Change the color of the car's wheels (rims) to ${colorValue}. Ensure the tires remain black rubber.`;
         } else {
-            // Use the name if provided, otherwise the hex value, or a combination if useful.
-            // Generally for AI, a descriptive name is better, but hex works too.
-            const colorValue = customColorName.trim() ? customColorName : customColorHex;
-            onApply({
-                type: modificationType,
-                value: 'Custom Color',
-                prompt: `${promptPrefix} ${colorValue}`,
-            });
+            // Fallback for other potential uses
+            finalPrompt = `${promptPrefix} ${colorValue}`;
         }
+
+        onApply({
+            type: modificationType,
+            value: `${selectedPart.id !== 'full' && modificationType === ModificationType.COLOR ? selectedPart.label + ' ' : ''}${displayValue}`,
+            prompt: finalPrompt,
+        });
     };
 
     return (
         <div className="space-y-6">
+            {/* Part Selector - Only show for Body Paint */}
+            {modificationType === ModificationType.COLOR && (
+                <div className="space-y-3">
+                    <h3 className="text-xl font-semibold">Target Area</h3>
+                    <div className="flex flex-wrap gap-2">
+                        {parts.map((part) => (
+                            <button
+                                key={part.id}
+                                onClick={() => setSelectedPart(part)}
+                                disabled={disabled}
+                                className={`px-3 py-1.5 text-sm font-medium rounded-full transition-all duration-200 border ${
+                                    selectedPart.id === part.id
+                                    ? 'bg-blue-600 border-blue-500 text-white shadow-md'
+                                    : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 hover:text-white'
+                                }`}
+                            >
+                                {part.label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div className="space-y-3">
                 <h3 className="text-xl font-semibold">Presets</h3>
                 <div className="grid grid-cols-5 gap-3">
@@ -136,7 +183,8 @@ const ColorPicker: React.FC<ColorPickerProps> = ({
                     disabled={disabled}
                     className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 disabled:bg-gray-600 disabled:text-gray-400 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-blue-900/20"
                 >
-                    Apply {mode === 'preset' ? selectedColor.name : (customColorName || customColorHex)}
+                    Apply {selectedPart.id !== 'full' && modificationType === ModificationType.COLOR ? `${selectedPart.label} ` : ''} 
+                    {mode === 'preset' ? selectedColor.name : (customColorName || customColorHex)}
                 </button>
             </div>
         </div>

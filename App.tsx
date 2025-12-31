@@ -100,13 +100,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStart }) => {
                   <img 
                     src={URL.createObjectURL(selectedFiles[view.id])} 
                     alt={view.label} 
-                    className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" 
+                    className="absolute inset-0 w-full h-full object-contain p-2 opacity-80 group-hover:opacity-100 transition-opacity" 
                   />
-                  <div className="z-10 bg-black/50 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="z-10 bg-black/50 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity absolute">
                      <UploadIcon className="w-6 h-6 text-white" />
                   </div>
                   <div className="absolute bottom-2 left-0 right-0 text-center z-10">
-                     <span className="text-xs font-bold bg-blue-600 px-2 py-1 rounded text-white">{view.label} Selected</span>
+                     <span className="text-xs font-bold bg-blue-600 px-2 py-1 rounded text-white shadow-lg">{view.label} Selected</span>
                   </div>
                 </>
               ) : (
